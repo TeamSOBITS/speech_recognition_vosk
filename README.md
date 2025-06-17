@@ -11,32 +11,28 @@
 Speech Recognition VOSK
 ======================
 <!--  TABLE OF CONTENTS -->
+<!-- 目次 -->
 <details>
   <summary>目次</summary>
   <ol>
     <li>
-      <a href="#introduction">概要</a>
+      <a href="#概要">概要</a>
     </li>
     <li>
-      <a href="#環境構築">環境構築</a>
+      <a href="#セットアップ">セットアップ</a>
       <ul>
         <li><a href="#環境条件">環境条件</a></li>
-        <li><a href="#installation">インストール方法</a></li>
+        <li><a href="#インストール方法">インストール方法</a></li>
       </ul>
     </li>
-    <li>
-    <a href="#実行・操作方法">実行・操作方法</a>
-    </li>
-    <li>
-    <a href="#Service Name">Service名</a>
-    </li>
-    <li><a href="#milestone">マイルストーン</a></li>
-    <li><a href="#Main Authors">Main Authors</a></li>
-    <!-- <li><a href="#contributing">Contributing</a></li> -->
-    <!-- <li><a href="#license">License</a></li> -->
-
+    <li><a href="#モデルダウンロード方法">モデルダウンロード方法</a></li>
+    <li><a href="#実行操作方法">実行・操作方法</a></li>
+    <li><a href="#パラメータ">パラメータ</a></li>
+    <li><a href="#インターフェイス">インターフェイス</a></li>
+    <li><a href="#マイルストーン">マイルストーン</a></li>
   </ol>
 </details>
+
 
 
 ## 概要
