@@ -24,9 +24,9 @@ python3 -m pip install \
     vosk \
     sounddevice
 
-# Install "sobits_msgs"
+# Install "sobits_interfaces"
 cd ..
-git clone -b feature/humble-devel https://github.com/TeamSOBITS/sobits_msgs.git
+git clone -b feature/humble-devel https://github.com/TeamSOBITS/sobits_interfaces.git
 
 cd $CURRENT_DIR
 
