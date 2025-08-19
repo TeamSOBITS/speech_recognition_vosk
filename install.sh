@@ -26,7 +26,7 @@ python3 -m pip install \
 
 # Install "sobits_interfaces"
 cd ..
-git clone -b feature/humble-devel https://github.com/TeamSOBITS/sobits_interfaces.git
+git clone -b humble-devel https://github.com/TeamSOBITS/sobits_interfaces.git
 
 cd $CURRENT_DIR
 
