@@ -1,16 +1,11 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import tkinter as tk
-from tkinter.filedialog import askdirectory
 from tkinter import ttk
-import tkinter.filedialog as filedialog
 import getpass
 
 import os
+import shutil
 import rclpy
 from rclpy.node import Node
-# from ament_index_python.packages import get_package_share_directory
 
 import zipfile
 
@@ -22,12 +17,10 @@ from threading import Thread
 class ModelDownloader(Node):
     def __init__(self):
         super().__init__('model_downloader')
-        # self.package_path = get_package_share_directory('speech_recognition_vosk')
-        # self.model_dir = os.path.join(self.package_path, 'models')
-        self.model_dir = "/home/" + str(getpass.getuser()) + "/colcon_ws/src/speech_recognition_vosk/models/"
+        self.model_dir = os.path.expanduser("~/.vosk_models")
 
         if not os.path.isdir(self.model_dir):
-            os.mkdir(self.model_dir)
+            os.makedirs(self.model_dir)
         
         self.execution_method = None
         self.url = None
@@ -39,6 +32,7 @@ class ModelDownloader(Node):
         self.gui_master = tk.Tk()
         self.gui_master.title('VOSK model downloader')
         self.gui_master.geometry('{}x{}'.format(self.gui_x, self.gui_y))
+        self.gui_master.minsize(650, 450)
 
         self.model_to_download = None
         self.languages, self.model_names = self.load_models()
@@ -95,24 +89,18 @@ class ModelDownloader(Node):
         self.directory_frame.grid_rowconfigure(3, weight=1)
         self.directory_frame.grid_columnconfigure(1, weight=1)
         
-        # self.lbl_download = tk.Label(self.directory_frame, text="Download model in directory: ", font=self.gui_font, anchor=tk.W)
-        # self.lbl_download.grid(row=0, column=0, sticky="w", pady=10)
-        
-        # self.lbl_directory = tk.Label(self.directory_frame, text=self.model_dir, font=self.gui_font, anchor=tk.W)
-        # self.lbl_directory.grid(row=1, column=0, sticky="news")
-        
-        # self.btn_browse = tk.Button(self.directory_frame, text="Browse", width=10, command=self.btn_click_browse_folder, font=self.gui_font)
-        # self.btn_browse.grid(row=1, column=1, sticky="news", pady=10)
-        
         self.btn_download = tk.Button(self.directory_frame, text="Download", width=10, command=lambda: self.btn_click_download(self.model_to_download), font=self.gui_font)
-        self.btn_download.grid(row=2, column=1, sticky="news", pady=10)
+        self.btn_download.grid(row=2, column=1, sticky="news", pady=5)
+
+        self.btn_delete = tk.Button(self.directory_frame, text="Delete", width=10, command=lambda: self.btn_click_delete(self.model_to_download), font=self.gui_font, state="disabled")
+        self.btn_delete.grid(row=3, column=1, sticky="news", pady=5)
         
         self.progressbar = ttk.Progressbar(self.directory_frame, length=400)
         self.progressbar.grid(row=2, column=0, sticky="news", pady=10)
         
-        self.btn_quit = tk.Button(self.directory_frame, text="Quit", width=4, command=lambda: exit(), font=self.gui_font)
+        self.btn_quit = tk.Button(self.directory_frame, text="Quit", width=4, command=lambda: self.gui_master.destroy(), font=self.gui_font)
         self.btn_quit.grid(row=4, column=2, sticky="news", pady=10)
-        # self.btn_quit.pack(side=tk.LEFT)
+        self.update_button_states()
         
     def get_listbox_language(self):
         value = self.listbox_languages.get(tk.ANCHOR)
@@ -121,12 +109,7 @@ class ModelDownloader(Node):
         value = self.listbox_model.get(tk.ANCHOR)     
 
     def btn_click_browse_folder(self):
-        path = filedialog.askdirectory()
-        if len(path) != 0:
-            self.model_dir = path
-            # self.lbl_directory.config(text=self.model_dir)
-            return True
-        return False
+        return True
 
     def get_model(self, language):
         models = []
@@ -187,14 +170,26 @@ class ModelDownloader(Node):
                     break
         return size, error, notes, license
 
+    def update_button_states(self):
+        if self.model_to_download:
+            path = os.path.join(self.model_dir, self.model_to_download)
+            if os.path.isdir(path):
+                self.btn_delete["state"] = "normal"
+                self.btn_download["state"] = "disabled"
+            else:
+                self.btn_delete["state"] = "disabled"
+                self.btn_download["state"] = "normal"
+
+    def btn_click_delete(self, model_to_delete):
+        path = os.path.join(self.model_dir, model_to_delete)
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+        self.update_button_states()
+
     def btn_click_download(self, model_to_download):
-        flag = self.btn_click_browse_folder()
-        if not flag:
-            return
         downloadThread = Thread(target=lambda: self.download(model_to_download))
         downloadThread.start()
         self.btn_download["state"] = "disabled"
-        # self.btn_browse["state"] = "disabled"
     
     def download(self, model_to_download):
         model_url, filename = self.get_model_link(model_to_download)
@@ -215,7 +210,6 @@ class ModelDownloader(Node):
                             percentage = round((int(current_size) / int(total_size)) * 100)
                             self.progressbar['value'] = percentage
                         else:
-                            percentage = "Infinite"
                             self.progressbar.config(mode="indeterminate")
                             self.progressbar.start()
 
@@ -223,18 +217,15 @@ class ModelDownloader(Node):
                 current_size = os.path.getsize(os.path.join(self.model_dir, filename))
                 percentage = round((int(current_size) / int(total_size)) * 100)
                 self.progressbar['value'] = percentage
-                self.btn_download["state"] = "normal"
-                # self.btn_browse["state"] = "normal"
                 
                 self.unzip(self.model_dir, filename)
+                self.update_button_states()
 
                 if self.execution_method == "inner":
                     self.gui_master.destroy()
             else:
-                current_size = os.path.getsize(os.path.join(self.model_dir, filename))
                 self.progressbar['value'] = 100
-                self.btn_download["state"] = "normal"
-                # self.btn_browse["state"] = "normal"
+                self.update_button_states()
 
     def on_combo_language_select(self, event):
         self.combo_models.set("")
@@ -247,6 +238,7 @@ class ModelDownloader(Node):
         size, error, notes, license = self.get_model_info(self.model_to_download, selected_language)
         info = "Name: %s\nSize: %s\nWord error rate/Speed: %s\nNotes: %s\nLicense: %s\n" % (self.model_to_download, size, error, notes, license)
         self.model_info_message.config(text=info)
+        self.update_button_states()
 
     def get_model_link(self, model_to_download):
         soup = BeautifulSoup(self.r.data, "lxml")
@@ -265,6 +257,7 @@ class ModelDownloader(Node):
         size, error, notes, license = self.get_model_info(self.model_to_download, selected_language)
         info = "Name: %s\nSize: %s\nWord error rate/Speed: %s\nNotes: %s\nLicense: %s\n" % (self.model_to_download, size, error, notes, license)
         self.model_info_message.config(text=info)
+        self.update_button_states()
     
     def unzip(self, directory, filename):
         with zipfile.ZipFile(os.path.join(directory, filename), 'r') as zip_ref:
@@ -280,10 +273,16 @@ class ModelDownloader(Node):
         self.gui_master.mainloop()
 
 def main(args=None):
-    rclpy.init(args=args)
-    downloader = ModelDownloader()
-    downloader.execute_standalone()
-    rclpy.spin(downloader)
+    try:
+        rclpy.init(args=args)
+        downloader = ModelDownloader()
+        downloader.execute_standalone()
+        rclpy.spin(downloader)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

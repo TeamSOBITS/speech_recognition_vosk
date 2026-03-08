@@ -8,9 +8,7 @@
 [![Issues][issues-shield]][issues-url]
 [![License][license-shield]][license-url]
 
-Speech Recognition VOSK
-======================
-<!--  TABLE OF CONTENTS -->
+# Speech Recognition VOSK
 <!-- 目次 -->
 <details>
   <summary>目次</summary>
@@ -28,7 +26,6 @@ Speech Recognition VOSK
     <li><a href="#モデルダウンロード方法">モデルダウンロード方法</a></li>
     <li><a href="#実行操作方法">実行・操作方法</a></li>
     <li><a href="#パラメータ">パラメータ</a></li>
-    <li><a href="#インターフェイス">インターフェイス</a></li>
     <li><a href="#マイルストーン">マイルストーン</a></li>
   </ol>
 </details>
@@ -36,10 +33,10 @@ Speech Recognition VOSK
 
 
 ## 概要
-これは,[Vosk](https://github.com/alphacep/vosk-api)と[ros_vosk](https://github.com/alphacep/ros-vosk)に基づく音声テキストサービス用のROSパッケージになります.
-ローカルで動作する，音声認識パッケージです.
-他の音声認識パッケージと同じように，Action通信で使えます．
-また，性質上GPUのPCを推奨します．
+これ本リポジトリは，[Vosk](https://github.com/alphacep/vosk-api)と[ros_vosk](https://github.com/alphacep/ros-vosk)の自動音声認識（ASR）機能を
+ROS2のアクション通信に対応させたものです．
+
+ローカル環境で動作します．
 
 <p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
@@ -57,10 +54,9 @@ Speech Recognition VOSK
 
 | System  | Version |
 | ------------- | ------------- |
-| Ubuntu | 22.04 (Jammy Jellyfish) |
-| ROS | Humble Hawksbill |
-| Python | 3.10 |実行・操作方法
-
+| Ubuntu | 24.04 (Noble Numbat) |
+| ROS | Jazzy Jalisco |
+| Python | 3.12 |
 
 <p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
@@ -73,7 +69,7 @@ Speech Recognition VOSK
    ```
 2. 本レポジトリをcloneします．
    ```sh
-   git clone -b humble-devel https://github.com/TeamSOBITS/speech_recognition_vosk.git
+   git clone -b jazzy-devel https://github.com/TeamSOBITS/speech_recognition_vosk.git
    ```
 3. レポジトリの中へ移動します．
    ```sh
@@ -100,43 +96,53 @@ Speech Recognition VOSK
 
 ## モデルダウンロード方法
 
-1. 使用したいモデルをダウンロードします．
-```bash
-ros2 run speech_recognition_vosk model_downloader
-```
+1. 以下のコマンドでGUIを起動します．
+
+    ```bash
+    ros2 run speech_recognition_vosk model_downloader
+    ```
 
 > **Note**
 > [list of models compatible with Vosk-API](https://alphacephei.com/vosk/models).の言語モデルを使用できます．
 
-> **Note**
-> モデルがデータベースに存在すれば，自動的にダウンロードされるはずです．
 
-2. モデルを選択する．
+2. 以下のようなGUIが表示されます．
+    ![img1](img/image.png)  
+    - 英語を使用する場合：
+      - Select language：English
+      - Select model：vosk-model-small-en-us-0.15
 
-最初の実行では，モデルをダウンロードするために以下のようなGUI画面が表示されます．
-![img1](img/image.png)  
-- 英語を使用する場合：
-  - Select language：English
-  - Select model：vosk-model-small-en-us-0.15
-
-- 日本語を使用する場合：
-  - Select Model：Japanese
-  - Select model：vosk-model-ja-0.22
-
-> [!WARNING]
->　モデルを入れる階層は~/colcon_ws/src/speech_recognition_vosk/modelsに入れてください．
-
+    - 日本語を使用する場合：
+      - Select Model：Japanese
+      - Select model：vosk-model-ja-0.22
+    - ダウンロードしたモデルは以下のコマンドでも確認できます
+      ```sh
+      ls ~/.vosk_models/
+      ```
 
 <p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
 
 ## 実行・操作方法
 
-1.Action Serverを起動します．
-```
-ros2 launch speech_recognition_vosk speech_recognition_vosk.launch.py
-```
-2.Action Clientを起動します．
+1. Ubuntuの設定で，サウンドの入力デバイスを使用するマイクに設定します．
+
+2. Action Serverを起動します．
+
+  ```sh
+  ros2 launch speech_recognition_vosk speech_recognition_vosk.launch.py
+  ```
+
+3. Action Clientを起動します．
+  - timeout_sec: マイクを開く秒数．負の値のときキャンセルを送信するまでフィードバックを返し続ける
+  - silent_mode: trueのときは検出時と終了時に音がならない
+  - feedback_rate: use_feedbackがTrueでvad_nameがNoneのときに返ってくる途中の音声認識結果の頻度
+  ```sh
+  ros2 action send_goal /speech_recognition sobits_interfaces/action/SpeechRecognition "timeout_sec: 5
+  silent_mode: false
+  feedback_rate: 0.5" -f
+  ```
+  録音された音声はsound_fileディレクトリに保存されます．
 
 <p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
@@ -146,30 +152,19 @@ ros2 launch speech_recognition_vosk speech_recognition_vosk.launch.py
 
 | パラメータ名   | 説明                                                                                  | デフォルト値                                                   |
 |---------------|---------------------------------------------------------------------------------------|--------------------------------------------------------------|
-| `model`       | 使用するVOSKモデル．軽量モデルや大容量モデルなどを選択できる．                                | `models/vosk-model-small-en-us-0.15`                        |
-| `sample_rate` | 1秒あたりの音声データ変換回数．高いほど音質が向上し，拾える周波数範囲が広がる．高くするとデータ量と負荷が増え，低くすると音質が劣化する可能性がある． | `44100`                                                      |
-| `blocksize`   | 一度に処理する音声データの塊のサイズ．リアルタイム性と処理負荷のバランスを決定する．大きくすると応答が遅くなり，小さくするとCPU負荷が高まる可能性がある．                                | `16000`                                                      |
+| model| 使用するVOSKモデル．軽量モデルや大容量モデルなどを選択できる．| vosk-model-small-en-us-0.15|
+| mic_volume | マイクの入力音量をパーセンテージで設定する．プログラム終了後は元の音量に戻る．例: "150%" | "" |
+| use_feedback | 音声認識の途中結果(フィードバック)を有効にするかどうか | True |
 
-<p align="right">(<a href="#readme-top">上に戻る</a>)</p>
+以下はエコーキャンセルに関するパラメータです．
+`use_echo_cancel`が`True`のときに有効です．
 
-
-## インターフェイス
-
-### Topics
-- （※現状，音声結果はトピックでは配信していません）
-
-### Services
-- `/vosk_node/describe_parameters`  
-- `/vosk_node/get_parameter_types`  
-- `/vosk_node/get_parameters`  
-- `/vosk_node/list_parameters`  
-- `/vosk_node/set_parameters`  
-- `/vosk_node/set_parameters_atomically`  
-
-### Actions
-- `/speech_recognition`  
-  - リクエスト：`sobits_interfaces/action/SpeechRecognition`  
-  - 途中経過を `feedback`，最終結果を `result` で受け取る
+| パラメータ | 説明 | デフォルト値 |
+| - | - | - |
+| use_echo_cancel | そのPCのスピーカーからの音をマイクが拾わないようにする． | False |
+| noise_suppression | ノイズを抑制する． | False |
+| analog_gain_control | マイクのハードウェアレベルで入力音量を自動調整する．大きな音は抑え，小さな音は増幅することで音割れや聞き取りにくさを防ぐ． | False |
+| digital_gain_control | ソフトウェアレベルで入力音量を自動調整する．音声データがデジタル化された後に振幅を調整する． | False |
 
 <p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 

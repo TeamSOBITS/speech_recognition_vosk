@@ -1,6 +1,0 @@
-playsound==1.2.2
-vosk
-sounddevice
-bs4
-alsamixergui 
-requests

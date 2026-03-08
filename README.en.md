@@ -8,9 +8,8 @@
 [![Issues][issues-shield]][issues-url]
 [![License][license-shield]][license-url]
 
-ROS VOSK
-======================
-<!--  TABLE OF CONTENTS -->
+# Speech Recognition VOSK
+
 <details>
   <summary>Table of Contents</summary>
   <ol>
@@ -24,24 +23,19 @@ ROS VOSK
         <li><a href="#installation">Installation</a></li>
       </ul>
     </li>
-    <li>
-    <a href="#launch">Launch and Usage</a>
-    </li>
-    <li>
-    <a href="#Service Name">Service Name</a>
-    </li>
-    <li><a href="#milestone">Milestone</a></li>
-    <li><a href="#Main Authors">Main Authors</a></li>
-    <!-- <li><a href="#contributing">Contributing</a></li> -->
-    <!-- <li><a href="#license">License</a></li> -->
-
+    <li><a href="#model-download-instructions">Model Download Instructions</a></li>
+    <li><a href="#launch-and-usage">Launch and Usage</a></li>
+    <li><a href="#parameters">Parameters</a></li>
+    <li><a href="#milestones">Milestones</a></li>
   </ol>
 </details>
 
 
 ## Introduction
 
-A ROS package for speech-to-text services based on [Vosk](https://github.com/alphacep/vosk-api) and [ros_vosk](https://github.com/alphacep/ros-vosk).
+This repository provides the automatic speech recognition (ASR) capabilities of OpenAI's [Vosk](https://github.com/alphacep/vosk-api) and [ros_vosk](https://github.com/alphacep/ros-vosk) adapted for ROS2 action communication.
+
+It runs in a local environment.
 
 <!-- GETTING STARTED -->
 ## Getting Started
@@ -49,130 +43,137 @@ A ROS package for speech-to-text services based on [Vosk](https://github.com/alp
 This section describes how to set up this repository.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 ### Prerequisites
 
 First, please set up the following environment before proceeding to the next installation stage.
 
 | System  | Version |
 | ------------- | ------------- |
-| Ubuntu | 20.04 (Focal Fossa) |
-| ROS | Noetic Ninjemys |
-| Python | 3.8 |
+| Ubuntu | 24.04 (Noble Numbat) |
+| ROS | Jazzy Jalisco |
+| Python | 3.12 |
 
-> [!NOTE]
-> If you need to install `Ubuntu` or `ROS`, please check our [SOBITS Manual](https://github.com/TeamSOBITS/sobits_manual#%E9%96%8B%E7%99%BA%E7%92%B0%E5%A2%83%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6).
-
-<p align="right">(<a href="#readme-top">上に戻る</a>)</p>
-
-
-### Installation
-
-1. Go to the `src` folder of ROS.
-   ```sh
-   $ roscd
-   # Or just use "cd ~/catkin_ws/" and change directory.
-   $ cd src/
-   ```
-2. Clone this repository.
-   ```sh
-   $ git clone https://github.com/TeamSOBITS/ros_vosk
-   ```
-3. Navigate into the repository.
-   ```sh
-   $ cd ros_vosk/
-   ```
-4. Install the dependent packages.
-   ```sh
-   $ bash install.sh
-   ```
-5. Compile the package.
-   ```sh
-   $ roscd
-   # Or just use "cd ~/catkin_ws/" and change directory.
-   $ catkin_make
-   ```
-
-> **Warning**
-> Sometimes the new generated msg might not be recognized and `import error` might appear. In such case, you will need to open a new terminal or restart your container (if you are using Docker).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
-## Launch
+### Installation
 
-1. Check the model you want to use is properly selected in the config file.
-```bash
-cat ~/catkin_ws/src/ros_vosk/cfg/params.yaml
-# cat ~/catkin_ws/src/speech_recognition_vosk/cfg/params.yaml
-```
+1. Navigate to your ROS2 src folder.
+    ```sh
+    cd ~/colcon_ws/src/
+    ```
+2. Clone this repository．
+    ```sh
+    git clone -b jazzy-devel https://github.com/TeamSOBITS/speech_recognition_vosk.git
+    ```
+3. Move into the repository directory.
+    ```sh
+    cd speech_recognition_vosk/
+    ```
+4. Install dependent packages
+    ```sh
+    bash install.sh
+    ```
+5. Compile the package.
+    ```sh
+    cd ~/colcon_ws/
+    ```
+    ```sh
+    colcon build --symlink-install
+    ```
+    ```sh
+    source ~/colcon_ws/install/setup.sh
+    ```
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## Model Download Instructions
+
+1. **Launch the GUI** using the following command:
+    ```bash
+    ros2 run speech_recognition_vosk model_downloader
+    ```
 
 > **Note**
-> Remember that you can use any language model from the [list of models compatible with Vosk-API](https://alphacephei.com/vosk/models).
+> You can use any language model from the [list of models compatible with Vosk-API](https://alphacephei.com/vosk/models).
 
-> **Note**
-> The model should be downloaded automatically if it exists in the database.
+2. The following GUI will appear:
+    ![img1](img/image.png)  
+    - To use English:
+      - Select language: English
+      - Select model: vosk-model-small-en-us-0.15
 
-2. Launch the node
-
-```bash
-# Launch the speech recognition node
-roslaunch ros_vosk ros_vosk.launch
-
-# if you want to select language
-# English ver
-roslaunch ros_vosk ros_vosk.launch lang=en
-# Japanese ver
-roslaunch ros_vosk ros_vosk.launch lang=ja
-
-# or by running
-rosrun ros_vosk vosk_node.py
-# rosrun speech_recognition_vosk vosk_node.py
-```
-3. First execution
-
-The first run will bring up a screen similar to the one below to download the model.
-![img1](img/image.png)  
-If you want to use English, select “English” for “Select language” and “vosk-model-en-us-0.15” for “Select model” to download.
-
-If you want to use Japanese, select “Japanese” for “Select language” and “vosk-model-ja-0.22” for “Select model” to download.
-
-## Service Name
-```
-/speech_recognition  #same web_speech_recognition
-```
+    - To use Japanese:
+      - Select Model: Japanese
+      - Select model: vosk-model-ja-0.22
+    - You can verify the downloaded models by running:
+      ```bash
+      ls ~/.vosk_models/
+      ```
 
 
-## Interface
+## Launch and Usage
 
-### Publishing Topics
-- speech_recognition/vosk_result    -> vosk_node.py publishes a custom "speech_recognition" message
-- speech_recognition/final_result   -> vosk_node.py publishes a simple string with the final result
-- speech_recognition/partial_result -> vosk_node.py publishes a simple string with the partial result
-- tts/status -> tts_engine.py publishes the state of the engine. True if it is speaking False if it is not. If the status is true vosk_node won't process the audio stream so it won't listen to itself 
-- tts/phrase -> tts_engine.py subscribes to this topic in order to speak the given string. Name your desire and it shall be heard by all in the room..
+1. In Ubuntu settings, set the input device for sound to the microphone you intend to use.
+
+2. Start the Action Server. Please wait for **Vosk Server READY** to appear before sending any goals.
+    ```sh
+    ros2 launch speech_recognition_vosk speech_recognition_vosk.launch.py 
+    ```
+3. Start the Action Client and send the text you want to speak.
+    - timeout_sec: Duration (in seconds) to keep the microphone open. If a negative value is provided, it continues to return feedback until a cancel request is sent.
+    - silent_mode: If set to `true`, the start and end notification sounds will not be played.
+    - feedback_rate: Specifies the frequency of intermediate speech recognition results when `use_feedback` is `True` and `vad_name` is `None`.
+
+    ```sh
+    ros2 action send_goal /speech_recognition sobits_interfaces/action/SpeechRecognition "timeout_sec: 5
+    silent_mode: false
+    feedback_rate: 0.5" -f
+    ```
+    Recorded audio is saved in the sound_file directory.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## Parameters
+
+The following parameters can be set in [speech_recognition_vosk.launch.py](launch/speech_recognition_vosk.launch.py).
+
+| Parameter | Description | Default Value |
+| :--- | :--- | :--- |
+| **`model`** | The VOSK model to use. *1 | `vosk-model-small-en-us-0.15` |
+| **`mic_volume`** | Sets the microphone input volume as a percentage. When finish program, the original volume will be restored. e.g., "150%" | `""` |
+| **`use_feedback`** | Whether to enable work-in-progress (WIP) speech recognition feedback. | `True` |
+
+The following are parameters related to echo cancellation.
+
+| Parameter | Description | Default Value |
+| :--- | :--- | :--- |
+| **`use_echo_cancel`** | Whether to use echo cancellation. | `False` |
+| **`noise_suppression`** | Whether to use noise suppression. | `False` |
+| **`analog_gain_control`** | Whether to use analog gain control. | `False` |
+| **`digital_gain_control`** | Whether to use digital gain control. | `False` |
 
 
-<!-- MILESTONE -->
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 ## Milestone
 
-- [x] OSS
-    - [x] Improved Documentation
-    - [x] Update of customized msgs
-
-See the [open issues][license-url] for a full list of proposed features (and known issues).
+See the [open issues][issues-url] for a full list of proposed features (and known issues).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[contributors-shield]: https://img.shields.io/github/contributors/TeamSOBITS/sobits_msgs.svg?style=for-the-badge
-[contributors-url]: https://github.com/TeamSOBITS/sobits_msgs/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/TeamSOBITS/sobits_msgs.svg?style=for-the-badge
-[forks-url]: https://github.com/TeamSOBITS/sobits_msgs/network/members
-[stars-shield]: https://img.shields.io/github/stars/TeamSOBITS/sobits_msgs.svg?style=for-the-badge
-[stars-url]: https://github.com/TeamSOBITS/sobits_msgs/stargazers
-[issues-shield]: https://img.shields.io/github/issues/TeamSOBITS/sobits_msgs.svg?style=for-the-badge
-[issues-url]: https://github.com/TeamSOBITS/sobits_msgs/issues
-[license-shield]: https://img.shields.io/github/license/TeamSOBITS/sobits_msgs.svg?style=for-the-badge
+[contributors-shield]: https://img.shields.io/github/contributors/TeamSOBITS/speech_recognition_vosk.svg?style=for-the-badge
+[contributors-url]: https://github.com/TeamSOBITS/speech_recognition_vosk/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/TeamSOBITS/speech_recognition_vosk.svg?style=for-the-badge
+[forks-url]: https://github.com/TeamSOBITS/speech_recognition_vosk/network/members
+[stars-shield]: https://img.shields.io/github/stars/TeamSOBITS/speech_recognition_vosk.svg?style=for-the-badge
+[stars-url]: https://github.com/TeamSOBITS/speech_recognition_vosk/stargazers
+[issues-shield]: https://img.shields.io/github/issues/TeamSOBITS/speech_recognition_vosk.svg?style=for-the-badge
+[issues-url]: https://github.com/TeamSOBITS/speech_recognition_vosk/issues
+[license-shield]: https://img.shields.io/github/license/TeamSOBITS/speech_recognition_vosk.svg?style=for-the-badge
 [license-url]: LICENSE

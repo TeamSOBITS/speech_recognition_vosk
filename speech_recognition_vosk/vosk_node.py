@@ -1,207 +1,188 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-# Intergrated by Angelo Antikatzidis https://github.com/a-prototype/vosk_ros
-# Source code based on https://github.com/alphacep/vosk-api/blob/master/python/example/test_microphone.py from VOSK's example code
-
-# Tuned for the python flavor of VOSK: vosk-0.3.31
-# If you do not have vosk then please install it by running $ pip3 install vosk
-# If you have a previous version of vosk installed then update it by running $ pip3 install vosk --upgrade
-# Tested on ROS Noetic & Melodic. Please advise the "readme" for using it with ROS Melodic 
-
-# This is a node that integrates VOSK with ROS and supports a TTS engine to be used along with it
-# When the TTS engine is speaking some words, the recognizer will stop listening to the audio stream so it won't listen to itself :)
-
-
 import os
-import sys
 import json
-import queue
 import time
+import threading
 import vosk
-import sounddevice as sd
-from mmap import MAP_SHARED
-from playsound import playsound
-import getpass
-
-
 import rclpy
+import psutil
 from rclpy.node import Node
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.executors import ExternalShutdownException
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 
-# from speech_recognition_vosk.msg import Speech_recognition
 from sobits_interfaces.action import SpeechRecognition
-from std_msgs.msg import String, Bool
-
 from ament_index_python.packages import get_package_share_directory
-
-# from . import model_downloader as downloader
+from .audio_utils import AudioSystem, AudioPlayer, AudioStorage
 
 class VoskSR(Node):
     def __init__(self):
         super().__init__('vosk_node')
+        self.GREEN, self.YELLOW, self.RED, self.ENDC = '\033[92m', '\033[93m', '\033[31m', '\033[0m'
 
         self.declare_parameter('model', "vosk-model-small-en-us-0.15")
-        self.declare_parameter('sample_rate', 44100)
-        self.declare_parameter('blocksize', 16000)
+        self.declare_parameter('use_echo_cancel', False)
+        self.declare_parameter('noise_suppression', False)
+        self.declare_parameter('analog_gain_control', False)
+        self.declare_parameter('digital_gain_control', False)
+        self.declare_parameter('mic_volume', "100%")
 
-        self.model_path = self.get_parameter('model').get_parameter_value().string_value
-        self.samplerate = self.get_parameter('sample_rate').get_parameter_value().integer_value
-        self.blocksize = self.get_parameter('blocksize').get_parameter_value().integer_value
+        model_name = self.get_parameter('model').value
+        self.model_path = os.path.join(os.path.expanduser("~/.vosk_models"), model_name)
 
         self.sound_folder_path = os.path.join(get_package_share_directory('sobits_interfaces'), 'mp3')
+        self.save_dir = os.path.join(get_package_share_directory('speech_recognition_vosk'), 'sound_file')
+
+        self.audio_sys = AudioSystem(
+            self.get_logger(), 
+            use_echo_cancel=self.get_parameter('use_echo_cancel').value,
+            noise_suppression=self.get_parameter('noise_suppression').value,
+            analog_gain=self.get_parameter('analog_gain_control').value,
+            digital_gain=self.get_parameter('digital_gain_control').value,
+            mic_volume=self.get_parameter('mic_volume').value
+        )
+        self.player = AudioPlayer(self.get_logger(), self.sound_folder_path)
+        self.storage = AudioStorage(self.get_logger(), self.save_dir)
 
         if not os.path.exists(self.model_path):
-            self.get_logger().fatal("\033[31m[NOT MODEL] " + str(self.model_path) + "\033[0m")
+            self.get_logger().fatal(f"{self.RED}[MODEL NOT FOUND] {self.model_path}{self.ENDC}")
             return
-
-        self.q = queue.Queue()
-
-        self.input_dev_num = sd.query_hostapis()[0]['default_input_device']
-        if self.input_dev_num == -1:
-            self.get_logger().fatal('No input device found')
-            raise ValueError('No input device found, device number == -1')
-
-        device_info = sd.query_devices(self.input_dev_num, 'input')
         
-
         self.model = vosk.Model(self.model_path)
-        
+        self.get_logger().info(f"{self.GREEN}Vosk Model Loaded. [{self.get_resources()}]{self.ENDC}")
 
-        self.get_logger().info("Waiting for service...")
+        self._callback_group = ReentrantCallbackGroup()
         self.server = ActionServer(
-            self,
-            SpeechRecognition,
-            "speech_recognition",
-            execute_callback=self.speech_recognize,
-            callback_group=ReentrantCallbackGroup(),
-            goal_callback=self.goal_callback,
-            cancel_callback=self.cancel_callback)
-
-    def stream_callback(self, indata, frames, time, status):
-        if status:
-            print(status, file=sys.stderr)
-        self.q.put(bytes(indata))
-
-    def goal_callback(self, goal_request):
-        """Accept or reject a client request to begin an action."""
-        # This server allows multiple goals in parallel
-        self.get_logger().info('Received goal request')
-        return GoalResponse.ACCEPT
-
-    def cancel_callback(self, goal_handle):
-        """Accept or reject a client request to cancel an action."""
-        self.get_logger().info('Received cancel request')
-        return CancelResponse.ACCEPT
+            self, SpeechRecognition, "speech_recognition",
+            execute_callback=self.execute_callback,
+            callback_group=self._callback_group,
+            goal_callback=lambda g: GoalResponse.ACCEPT,
+            cancel_callback=lambda g: CancelResponse.ACCEPT)
         
-    async def speech_recognize(self, goal_handle):
-        feedback = SpeechRecognition.Feedback()
-        response = SpeechRecognition.Result()
+        self.get_logger().info(f"{self.YELLOW}Vosk Server READY{self.ENDC}")
+
+    def get_resources(self):
+        mem = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+        return f"Mem: {mem:.1f}MB"
+
+    def execute_callback(self, goal_handle):
+        container = {"text": "", "current_view": "", "done": False}
+        stop_event = threading.Event()
+        last_published_text = ""
+
+        thread = threading.Thread(
+            target=self._recognition_worker,
+            args=(goal_handle, container, stop_event),
+            daemon=True
+        )
+        thread.start()
+
+        fb_period = 1.0 / float(goal_handle.request.feedback_rate)
 
         try:
-            with sd.RawInputStream(samplerate=self.samplerate, blocksize=self.blocksize, device=self.input_dev_num, dtype='int16', channels=1, callback=self.stream_callback):
+            while not container["done"]:
+                if goal_handle.is_cancel_requested:
+                    stop_event.set()
+                    goal_handle.canceled()
+                    self.get_logger().info(f"{self.YELLOW}Action Canceled.{self.ENDC}")
+                    return SpeechRecognition.Result()
 
-                if (not goal_handle.request.silent_mode):
-                    playsound(os.path.join(self.sound_folder_path, 'start_sound.mp3'))
-                self.get_logger().info('Server Start')
+                current_text = container["current_view"]
+                if current_text and current_text != last_published_text:
+                    new_part = current_text[len(last_published_text):].lstrip()
+                    if new_part:
+                        fb = SpeechRecognition.Feedback()
+                        fb.addition_text = new_part
+                        goal_handle.publish_feedback(fb)
+                        last_published_text = current_text
+                
+                time.sleep(fb_period)
+        finally:
+            stop_event.set()
+            self.audio_sys.stop()
+            thread.join(timeout=1.0)
 
-                rec = vosk.KaldiRecognizer(self.model, self.samplerate)
+        result = SpeechRecognition.Result()
+        result.result_text = container["text"] if container["text"] else "No speech recognized."
+        
+        self.get_logger().info(f"{self.GREEN}Succeeded: {result.result_text}{self.ENDC}")
+        goal_handle.succeed()
+        return result
 
-                last_wip_text_to_feedback = ""
-                feedback.addition_text = ""
-                response.result_text = ""
+    def _recognition_worker(self, goal_handle, container, stop_event):
+        confirmed = []
+        audio_started = False
+        absolute_start_time = time.time() 
+        detection_start_time = None
 
-                start_time = time.time()
-                last_feedback_time = time.time()
-                while rclpy.ok():
+        try:
+            self.audio_sys.start_recording(chunk_size=3200)
+            self.storage.start_write_session("output.wav")
 
-                    partial = None
-                    result_text = None
-                    isRecognized = False
-                    isRecognized_partially = False
+            if not goal_handle.request.silent_mode:
+                self.player.play('start_sound.mp3')
+            
+            rec = vosk.KaldiRecognizer(self.model, 16000)
 
-                    if goal_handle.is_cancel_requested:
-                        self.get_logger().info('Goal canceled')
-                        self.get_logger().info('Wip Result : ' + response.result_text)
-                        goal_handle.canceled()
-                        return response
+            while rclpy.ok() and not stop_event.is_set():
+                now = time.time()
 
-                    data = self.q.get()
-                    if rec.AcceptWaveform(data):
+                if audio_started and (now - detection_start_time) > goal_handle.request.timeout_sec:
+                    self.get_logger().info(f"{self.YELLOW}Recording timeout reached.{self.ENDC}")
+                    break
+                
+                if not audio_started and (now - absolute_start_time) > (goal_handle.request.timeout_sec + 5.0):
+                    self.get_logger().info(f"{self.RED}No audio detected. Force stopping.{self.ENDC}")
+                    break
 
-                        result = rec.FinalResult()
-                        diction = json.loads(result)
-                        lentext = len(diction["text"])
+                data = self.audio_sys.read(timeout=0.01)
+                if data is None:
+                    continue
+                
+                if not audio_started:
+                    audio_started = True
+                    detection_start_time = time.time()
+                    self.get_logger().info(f"{self.GREEN}Audio stream detected.{self.ENDC}")
 
-                        if lentext > 0:
-                            result_text = diction["text"]
-                            isRecognized = True
+                self.storage.write_chunk(data)
+                raw_bytes = data.tobytes()
+                partial = ""
+                if rec.AcceptWaveform(raw_bytes):
+                    res_dict = json.loads(rec.Result())
+                    text = res_dict.get("text", "").strip()
+                    if text: confirmed.append(text)
+                else:
+                    partial = json.loads(rec.PartialResult()).get("partial", "").strip()
 
-                        rec.Reset()
-                    else:
+                container["current_view"] = " ".join(confirmed + ([partial] if partial else [])).strip()
 
-                        result_partial = rec.PartialResult()
-                        if len(result_partial) > 20:  # there is partial
+            final_res = json.loads(rec.FinalResult()).get("text", "").strip()
+            if final_res: confirmed.append(final_res)
 
-                            isRecognized_partially = True
-                            partial_dict = json.loads(result_partial)
-                            partial = partial_dict["partial"]
+            if not goal_handle.request.silent_mode:
+                self.player.play('end_sound.mp3')
 
-
-                    if (isRecognized or (isRecognized_partially and partial)): time.sleep(0.1)
-
-                    if (result_text):
-                        if (len(response.result_text) != 0):
-                            response.result_text += " "
-                        response.result_text += result_text
-
-                    if ((time.time() - last_feedback_time) > (1.0/float(goal_handle.request.feedback_rate))):
-                        if (partial):
-                            wip_result = response.result_text + partial
-                        else:
-                            wip_result = response.result_text
-
-                        feedback.addition_text = wip_result[len(last_wip_text_to_feedback):]
-                        goal_handle.publish_feedback(feedback)
-
-                        last_wip_text_to_feedback = response.result_text
-                        last_feedback_time = time.time()
-
-                    if ((time.time() - start_time) > goal_handle.request.timeout_sec):
-                        if (partial):
-                            response.result_text += partial
-                        self.get_logger().info("Result : " + response.result_text)
-                        break
-
-                if (not goal_handle.request.silent_mode):
-                    playsound(os.path.join(self.sound_folder_path, 'end_sound.mp3'))
-
-                goal_handle.succeed()
-                return response
+            container["text"] = " ".join(confirmed).strip()
 
         except Exception as e:
-            exit(type(e).__name__ + ': ' + str(e))
-        except KeyboardInterrupt:
-            self.get_logger().info("Stopping the VOSK speech recognition node...")
-            time.sleep(1)
-            print("node terminated")
-
-
+            self.get_logger().error(f"Worker Thread Error: {e}")
+        finally:
+            self.storage.close_write_session()
+            container["done"] = True
 
 def main(args=None):
     try:
         rclpy.init(args=args)
-
-        rec = VoskSR()
-
-        # Use a MultiThreadedExecutor to enable processing goals concurrently
+        node = VoskSR()
         executor = MultiThreadedExecutor()
-
-        rclpy.spin(rec, executor=executor)
+        try:
+            rclpy.spin(node, executor=executor)
+        finally:
+            node.audio_sys.stop() 
+            node.destroy_node()
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
+    finally:
+        rclpy.try_shutdown()
+
 if __name__ == '__main__':
     main()

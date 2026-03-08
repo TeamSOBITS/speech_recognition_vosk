@@ -1,34 +1,30 @@
 #!/bin/bash
 
+echo "╔══╣ Install: Speech Recognition Vosk for ROS (OPTIMIZED) ╠══╗"
 
-echo "╔══╣ Install: Speech Recognition Vosk for ROS (STARTING) ╠══╗"
+export PIP_BREAK_SYSTEM_PACKAGES=1
 
-
-# Keep the current directory
 CURRENT_DIR=$(pwd)
 
-# Install necessary packages
-sudo apt-get update
-sudo apt-get install -y \
-    ros-${ROS_DISTRO}-std-msgs
+sudo apt update
+sudo apt install -y \
+    python3-tk \
+    pulseaudio-utils \
+    libc++1 \
 
-sudo apt-get install -y \
-    python3-tk
-
-# Install necessary packages from pip3
 python3 -m pip install -U pip
 python3 -m pip install \
-    beautifulsoup4 \
-    soundfile \
-    playsound \
     vosk \
-    sounddevice
 
-# Install "sobits_interfaces"
+pip3 install -U "numpy==1.26.4" \
+
 cd ..
-git clone -b humble-devel https://github.com/TeamSOBITS/sobits_interfaces.git
+if [ ! -d "sobits_interfaces" ]; then
+    git clone -b jazzy-devel https://github.com/TeamSOBITS/sobits_interfaces.git
+else
+    echo "sobits_interfaces already exists. Skipping clone."
+fi
 
-cd $CURRENT_DIR
-
+cd "$CURRENT_DIR"
 
 echo "╚══╣ Install: Speech Recognition Vosk for ROS (FINISHED) ╠══╝"

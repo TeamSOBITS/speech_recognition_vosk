@@ -6,23 +6,58 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
-    return LaunchDescription([
-        Node(
-            package='speech_recognition_vosk',
-            executable='vosk_node',
-            name='vosk_node',
-            output='screen',
-            parameters=[
-                {
-                    'sample_rate': 44100,
-                    'blocksize': 16000,
-                    'model': os.path.join(get_package_share_directory("speech_recognition_vosk"), 'models', 'vosk-model-small-en-us-0.15'),  # Lightweight wideband model for US English
-                    # 'model': os.path.join(get_package_share_directory("speech_recognition_vosk"), 'models', 'vosk-model-en-us-0.22'),  # Big model for US English
-                    # 'model': os.path.join(get_package_share_directory("speech_recognition_vosk"), 'models', 'vosk-model-small-ja-0.22'), # Lightweight wideband model for Japanese
-                    # 'model': os.path.join(get_package_share_directory("speech_recognition_vosk"), 'models', 'vosk-model-ja-0.22'), # Big model for Japanese
-                    # 'model': os.path.join(get_package_share_directory("speech_recognition_vosk"), 'models', 'vosk-model-spk-0.4'), # Model for speaker language identification
-                },
-            ],
-        )
-    ])
+    model_arg = DeclareLaunchArgument(
+        "model",
+        default_value="vosk-model-small-en-us-0.15",
+        description="Vosk model name (e.g. vosk-model-small-ja-0.22)"
+    )
+    mic_volume_arg = DeclareLaunchArgument(
+        "mic_volume",
+        default_value="",
+        description="Microphone volume percentage (e.g. 150%)"
+    )
+    use_echo_cancel_arg = DeclareLaunchArgument(
+        "use_echo_cancel",
+        default_value="False",
+        description="Enable WebRTC echo cancellation"
+    )
+    noise_suppression_arg = DeclareLaunchArgument(
+        "noise_suppression",
+        default_value="False",
+        description="Enable noise suppression"
+    )
+    analog_gain_arg = DeclareLaunchArgument(
+        "analog_gain_control",
+        default_value="False",
+        description="Enable automatic analog gain control"
+    )
+    digital_gain_arg = DeclareLaunchArgument(
+        "digital_gain_control",
+        default_value="False",
+        description="Enable digital gain control"
+    )
 
+    vosk_node = Node(
+        package='speech_recognition_vosk',
+        executable='vosk_node',
+        name='vosk_node',
+        output='screen',
+        parameters=[{
+            'model': LaunchConfiguration('model'),
+            'mic_volume': LaunchConfiguration('mic_volume'),
+            'use_echo_cancel': LaunchConfiguration('use_echo_cancel'),
+            'noise_suppression': LaunchConfiguration('noise_suppression'),
+            'analog_gain_control': LaunchConfiguration('analog_gain_control'),
+            'digital_gain_control': LaunchConfiguration('digital_gain_control'),
+        }],
+    )
+
+    return LaunchDescription([
+        model_arg,
+        mic_volume_arg,
+        use_echo_cancel_arg,
+        noise_suppression_arg,
+        analog_gain_arg,
+        digital_gain_arg,
+        vosk_node
+    ])
