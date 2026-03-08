@@ -6,15 +6,21 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
+    stt_name_arg = DeclareLaunchArgument(
+        "stt_name",
+        default_value="vosk",
+        description="STT engine name (whisper, vosk, etc.)"
+    )
+
     model_arg = DeclareLaunchArgument(
         "model",
         default_value="vosk-model-small-en-us-0.15",
-        description="Vosk model name (e.g. vosk-model-small-ja-0.22)"
+        description="Vosk model name"
     )
     mic_volume_arg = DeclareLaunchArgument(
         "mic_volume",
         default_value="",
-        description="Microphone volume percentage (e.g. 150%)"
+        description="Microphone volume percentage"
     )
     use_echo_cancel_arg = DeclareLaunchArgument(
         "use_echo_cancel",
@@ -43,6 +49,7 @@ def generate_launch_description():
         name='vosk_node',
         output='screen',
         parameters=[{
+            'stt_name': LaunchConfiguration('stt_name'), # ここが重要
             'model': LaunchConfiguration('model'),
             'mic_volume': LaunchConfiguration('mic_volume'),
             'use_echo_cancel': LaunchConfiguration('use_echo_cancel'),
@@ -53,6 +60,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        stt_name_arg,
         model_arg,
         mic_volume_arg,
         use_echo_cancel_arg,
